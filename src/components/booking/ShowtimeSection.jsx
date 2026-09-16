@@ -174,6 +174,14 @@ export default function ShowtimeSection({
     });
 
     const targetUrl = `/booking/seats?${bookingParams.toString()}`;
+
+    // Require authentication before choosing seats or proceeding to booking
+    if (!isAuthenticated) {
+      toast.info("Please log in or create an account to choose showtimes and book your seats.");
+      navigate(`/login?redirect=${encodeURIComponent(targetUrl)}`);
+      return;
+    }
+
     navigate(targetUrl);
   };
 

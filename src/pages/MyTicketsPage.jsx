@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { toast } from "react-toastify";
 import { selectTheme } from "../redux/slices/uiSlice";
 import { selectAllTickets, setUserTickets } from "../redux/slices/ticketSlice";
-import { selectCurrentUser } from "../redux/slices/authSlice";
+import { selectCurrentUser, selectIsAuthenticated } from "../redux/slices/authSlice";
 import { listenUserBookings } from "../services/firestoreService";
 import { TICKETS_PER_PAGE } from "../data/ticketData";
 import TicketCard from "../components/tickets/TicketCard";
@@ -12,9 +13,11 @@ import ScrollReveal from "../components/common/ScrollReveal";
 
 export default function MyTicketsPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const theme = useSelector(selectTheme);
   const isDark = theme === "dark";
   const currentUser = useSelector(selectCurrentUser);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -23,11 +26,20 @@ export default function MyTicketsPage() {
   );
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Sync tickets in real-time from Firestore for the logged-in user
+  // Redirect guest to login if not authenticated
   useEffect(() => {
-    const uid = currentUser?.uid || currentUser?.id || "guest_user";
+    if (!isAuthenticated) {
+      toast.info("Please log in to view your ticket history.");
+      navigate("/login?redirect=/my-tickets");
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Sync tickets in real-time from Firestore specifically for the logged-in user
+  useEffect(() => {
+    if (!currentUser?.uid && !currentUser?.id) return;
+    const uid = currentUser.uid || currentUser.id;
     const unsub = listenUserBookings(uid, (tickets) => {
-      if (tickets && Array.isArray(tickets) && tickets.length > 0) {
+      if (tickets && Array.isArray(tickets)) {
         dispatch(setUserTickets(tickets));
       }
     });

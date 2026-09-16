@@ -385,10 +385,10 @@ export const TMDB_15_REAL_MOVIES = [
     genreLabel: "Sci-Fi",
     duration: "3:12:00",
     hall: "3D Laser Hall",
-    date: "20-25/09/2026",
-    startDate: "2026-08-25",
-    endDate: "2026-09-01",
-    totalDays: 7,
+    date: "19/12/2026",
+    startDate: "2026-12-19",
+    endDate: "2026-12-31",
+    totalDays: 12,
     genres: "Sci-Fi, Adventure",
     status: "Upcoming",
     poster_path:
@@ -398,6 +398,32 @@ export const TMDB_15_REAL_MOVIES = [
     vote_average: 8.8,
     overview:
       "Set more than a decade after the events of the first film, learn the story of the Sully family, the trouble that follows them, and the battles they fight to stay alive.",
+    isFreeStream: true,
+  },
+  // 16. Upcoming Movie: Superman
+  {
+    id: 1061474,
+    tmdbId: 1061474,
+    title: "Superman",
+    isTv: false,
+    media_type: "movie",
+    year: "2026",
+    genreLabel: "Action",
+    duration: "2:20:00",
+    hall: "ScreenX 270°",
+    date: "11/07/2026",
+    startDate: "2026-07-11",
+    endDate: "2026-07-25",
+    totalDays: 14,
+    genres: "Action, Sci-Fi",
+    status: "Upcoming",
+    poster_path:
+      "https://image.tmdb.org/t/p/w500/630ROLm4V5B9tY6AUv9v0zI9yF7.jpg",
+    backdrop_path:
+      "https://image.tmdb.org/t/p/original/9nhjGaFLKtddDPtPaX5EmKqsWdH.jpg",
+    vote_average: 8.9,
+    overview:
+      "Superman embarks on a journey to reconcile his Kryptonian heritage with his human upbringing as Clark Kent in a complex world.",
     isFreeStream: true,
   },
 ];

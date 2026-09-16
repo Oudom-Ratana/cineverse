@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { User, Bell, Sun, Moon, Menu, X, LogOut, Heart } from "lucide-react";
+import {
+  User,
+  Bell,
+  Sun,
+  Moon,
+  Menu,
+  X,
+  LogOut,
+  Heart,
+  LayoutDashboard,
+  Ticket,
+  Calendar,
+  Clock,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
 import {
   selectCurrentUser,
   selectIsAuthenticated,
@@ -9,26 +24,51 @@ import {
 } from "../../redux/slices/authSlice";
 import { selectTheme, toggleTheme } from "../../redux/slices/uiSlice";
 import { selectFavouriteMovies } from "../../redux/slices/favouriteSlice";
-import { selectUserTickets } from "../../redux/slices/ticketSlice";
+import { selectUserTickets, setUserTickets } from "../../redux/slices/ticketSlice";
+import { listenUserBookings } from "../../services/firestoreService";
 import { toast } from "react-toastify";
 import CiniverseLogo from "../../assets/logo/CiniverseLogo.png";
 
 export default function Navbar() {
   const dispatch = useDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const theme = useSelector(selectTheme);
   const favouriteMovies = useSelector(selectFavouriteMovies) || [];
   const favoriteCount = favouriteMovies.length;
   const userTickets = useSelector(selectUserTickets) || [];
-  const ticketCount = userTickets.length;
+  const ticketCount = isAuthenticated ? userTickets.length : 0;
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isBellDropdownOpen, setIsBellDropdownOpen] = useState(false);
   const profileDropdownRef = useRef(null);
+  const bellDropdownRef = useRef(null);
 
-  // Close profile dropdown when clicking outside
+  // Sync tickets in real-time from Firestore specifically for the currently logged-in user
+  useEffect(() => {
+    if (!isAuthenticated || (!user?.uid && !user?.id)) {
+      dispatch(setUserTickets([]));
+      return;
+    }
+
+    const uid = user.uid || user.id;
+    const unsub = listenUserBookings(uid, (tickets) => {
+      if (tickets && Array.isArray(tickets)) {
+        dispatch(setUserTickets(tickets));
+      } else {
+        dispatch(setUserTickets([]));
+      }
+    });
+
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, [isAuthenticated, user, dispatch]);
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -37,19 +77,27 @@ export default function Navbar() {
       ) {
         setIsProfileDropdownOpen(false);
       }
+      if (
+        bellDropdownRef.current &&
+        !bellDropdownRef.current.contains(event.target)
+      ) {
+        setIsBellDropdownOpen(false);
+      }
     };
 
-    if (isProfileDropdownOpen) {
+    if (isProfileDropdownOpen || isBellDropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isProfileDropdownOpen]);
+  }, [isProfileDropdownOpen, isBellDropdownOpen]);
 
-  // Close mobile menu on route change
+  // Close menus on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsProfileDropdownOpen(false);
+    setIsBellDropdownOpen(false);
   }, [location.pathname]);
 
   const [isScrolled, setIsScrolled] = useState(false);
@@ -123,24 +171,154 @@ export default function Navbar() {
 
         {/* 3. Right: Action Buttons (Notification Bell, Theme Switcher, Avatar/Login on far right) */}
         <div className="hidden sm:flex items-center gap-3">
-          {/* Notification Bell Button — navigates to /my-tickets */}
-          <Link
-            to="/my-tickets"
-            className={`relative w-[46px] h-[46px] rounded-full border backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 transition shadow-xs ${
-              isTransparentHeroMode
-                ? "bg-[#1A1F25]/20 hover:bg-[#1A1F25]/35 border-white/20 text-[#FFD700]"
-                : "bg-white/80 hover:bg-white dark:bg-[#1A1F25]/40 dark:hover:bg-[#1A1F25]/60 border-neutral-200 dark:border-white/15 text-[#B90101] dark:text-[#EAB308]"
-            }`}
-            aria-label="My Tickets"
-            title="My Tickets"
-          >
-            <Bell className="w-5 h-5 fill-current" />
-            {ticketCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#B90101] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md animate-pulse">
-                {ticketCount > 9 ? "9+" : ticketCount}
-              </span>
+          {/* Notification Bell Button with User-Specific Bookings Popover */}
+          <div className="relative" ref={bellDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsBellDropdownOpen((prev) => !prev)}
+              className={`relative w-[46px] h-[46px] rounded-full border backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 transition shadow-xs cursor-pointer ${
+                isTransparentHeroMode
+                  ? "bg-[#1A1F25]/20 hover:bg-[#1A1F25]/35 border-white/20 text-[#FFD700]"
+                  : "bg-white/80 hover:bg-white dark:bg-[#1A1F25]/40 dark:hover:bg-[#1A1F25]/60 border-neutral-200 dark:border-white/15 text-[#B90101] dark:text-[#EAB308]"
+              }`}
+              aria-label="My Tickets"
+              title="My Bookings & Tickets"
+            >
+              <Bell className="w-5 h-5 fill-current" />
+              {ticketCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#B90101] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md animate-pulse">
+                  {ticketCount > 9 ? "9+" : ticketCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Bell Dropdown Menu */}
+            {isBellDropdownOpen && (
+              <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl overflow-hidden z-50 animate-scaleUp">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-[#B90101]" />
+                    <span className="font-extrabold text-sm text-neutral-900 dark:text-white">
+                      My Booking History
+                    </span>
+                  </div>
+                  {isAuthenticated && ticketCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-[#B90101]/10 text-[#B90101] font-black text-[10px] uppercase tracking-wider">
+                      {ticketCount} {ticketCount === 1 ? "Ticket" : "Tickets"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Dropdown Body */}
+                <div className="max-h-80 overflow-y-auto p-3 space-y-2">
+                  {!isAuthenticated ? (
+                    <div className="py-6 px-4 text-center space-y-3">
+                      <div className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto text-neutral-400">
+                        <Bell className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Please sign in to view your personalized tickets and booking history.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBellDropdownOpen(false);
+                          navigate("/login?redirect=/my-tickets");
+                        }}
+                        className="px-4 py-2 rounded-full bg-[#B90101] hover:bg-[#9E0000] text-white text-xs font-bold transition shadow-xs"
+                      >
+                        Sign In / Register
+                      </button>
+                    </div>
+                  ) : userTickets.length === 0 ? (
+                    <div className="py-6 px-4 text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto text-neutral-400">
+                        <Ticket className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                        No Bookings Yet
+                      </p>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        You have not booked any tickets with this account yet.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBellDropdownOpen(false);
+                          navigate("/stream");
+                        }}
+                        className="text-xs font-bold text-[#B90101] hover:underline pt-1 inline-block"
+                      >
+                        Explore Movies & Book Now →
+                      </button>
+                    </div>
+                  ) : (
+                    userTickets.slice(0, 3).map((ticket) => {
+                      const movieObj = ticket.movie || {};
+                      const showtimeObj = ticket.showtime || {};
+                      const posterUrl =
+                        movieObj.poster ||
+                        (movieObj.poster_path
+                          ? `https://image.tmdb.org/t/p/w200${movieObj.poster_path}`
+                          : "https://i.pinimg.com/736x/95/26/68/9526684fe11e38cf6bb6fbd48e37de6a.jpg");
+
+                      return (
+                        <div
+                          key={ticket.id || ticket.bookingId}
+                          onClick={() => {
+                            setIsBellDropdownOpen(false);
+                            navigate(ticket.viewUrl || "/my-tickets");
+                          }}
+                          className="flex items-center gap-3 p-2.5 rounded-xl bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-800/60 dark:hover:bg-neutral-800 transition border border-neutral-200/60 dark:border-neutral-700/50 cursor-pointer group"
+                        >
+                          <img
+                            src={posterUrl}
+                            alt={movieObj.title}
+                            className="w-12 h-16 object-cover rounded-lg shrink-0 shadow-xs group-hover:scale-105 transition"
+                          />
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <h5 className="font-extrabold text-xs text-neutral-900 dark:text-white truncate">
+                              {movieObj.title || "Cinema Ticket"}
+                            </h5>
+                            <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                              {showtimeObj.location || "Ciniverse Cinema"} • {showtimeObj.hall || "Hall 3"}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-neutral-600 dark:text-neutral-300">
+                              <span>{showtimeObj.date}</span>
+                              <span>•</span>
+                              <span className="font-bold text-[#B90101]">{showtimeObj.time}</span>
+                            </div>
+                            <p className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300">
+                              Seats: {Array.isArray(ticket.seats) ? ticket.seats.join(", ") : ticket.seats}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-neutral-400 group-hover:text-[#B90101] transition shrink-0" />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                {isAuthenticated && userTickets.length > 0 && (
+                  <div className="p-2.5 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950/80 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBellDropdownOpen(false);
+                        navigate("/my-tickets");
+                      }}
+                      className="w-full py-2 rounded-xl bg-[#B90101] hover:bg-[#9E0000] text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <span>View All My Tickets ({userTickets.length})</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
-          </Link>
+          </div>
 
           {/* Theme Switcher Toggle Button */}
           <button
@@ -223,6 +401,16 @@ export default function Navbar() {
                         {favoriteCount}
                       </span>
                     )}
+                  </Link>
+
+                  {/* 3. Admin Portal Option */}
+                  <Link
+                    to="/admin/movies"
+                    onClick={() => setIsProfileDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-[#B90101] dark:hover:text-[#B90101] transition"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-[#B90101]" />
+                    <span>Admin Movie Library</span>
                   </Link>
 
                   <div className="my-1 border-t border-neutral-100 dark:border-white/5" />

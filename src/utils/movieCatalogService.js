@@ -2,15 +2,21 @@ import { useState, useEffect } from "react";
 import { TMDB_15_REAL_MOVIES } from "./tmdbCatalog";
 import { createDefaultBranchSchedules } from "./hallConfigs";
 import { fetchReal15TmdbCatalog } from "../services/tmdbService";
+import {
+  listenAdminMovies,
+  saveAdminMovie,
+  saveAllAdminMovies,
+  deleteAdminMovie as deleteAdminMovieFirestore,
+} from "../services/firestoreService";
 
 const STORAGE_KEY = "admin_movies_catalog";
-const VERSION_KEY = "admin_movies_catalog_v_4";
+const VERSION_KEY = "admin_movies_catalog_v_6";
 const CATALOG_EVENT = "flixzone_catalog_updated";
 
 /**
  * Ensures each movie has real branches, schedules, and complete metadata
  */
-function enrichMovie(movie) {
+export function enrichMovie(movie) {
   if (!movie) return movie;
   const branches =
     movie.branches && Array.isArray(movie.branches) && movie.branches.length > 0
@@ -19,6 +25,8 @@ function enrichMovie(movie) {
 
   return {
     ...movie,
+    id: movie.id || movie.tmdbId || Math.floor(100000 + Math.random() * 900000),
+    title: movie.title || movie.name || "Cinema Movie",
     startDate: movie.startDate || "2026-08-25",
     endDate: movie.endDate || "2026-09-01",
     totalDays: movie.totalDays || 7,
@@ -30,12 +38,12 @@ function enrichMovie(movie) {
 }
 
 /**
- * Get all active movies set by Admin (defaults to 15 Real TMDB titles with real branches)
+ * Get all active movies set by Admin
  */
 export function getStoredMovies() {
   try {
     const isUpToDate =
-      localStorage.getItem(VERSION_KEY) === "v4_unique_posters_sync";
+      localStorage.getItem(VERSION_KEY) === "v5_firestore_sync";
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved !== null && isUpToDate) {
       const parsed = JSON.parse(saved);
@@ -47,11 +55,11 @@ export function getStoredMovies() {
     console.error("Error parsing stored movies:", e);
   }
 
-  // Initialize or auto-upgrade with the 15 Real TMDB movies with 100% unique posters
+  // Initialize with the 15 Real TMDB movies
   const initial15 = TMDB_15_REAL_MOVIES.map(enrichMovie);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initial15));
-    localStorage.setItem(VERSION_KEY, "v4_unique_posters_sync");
+    localStorage.setItem(VERSION_KEY, "v5_firestore_sync");
   } catch (e) {}
   return initial15;
 }
@@ -60,11 +68,17 @@ export function getStoredMovies() {
  * Save movies and notify all pages/components in real-time
  */
 export function saveStoredMovies(movies) {
+  const enriched = movies.map(enrichMovie);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(movies));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
+    localStorage.setItem(VERSION_KEY, "v5_firestore_sync");
   } catch (e) {
     console.error("Error saving stored movies:", e);
   }
+
+  // Persist to live Firestore
+  saveAllAdminMovies(enriched).catch(() => {});
+
   // Dispatch event so any open React component re-renders instantly
   window.dispatchEvent(new Event(CATALOG_EVENT));
 }
@@ -73,9 +87,11 @@ export function saveStoredMovies(movies) {
  * Add a new movie to the catalog
  */
 export function addCatalogMovie(movie) {
+  const enriched = enrichMovie(movie);
   const current = getStoredMovies();
-  const updated = [movie, ...current];
+  const updated = [enriched, ...current.filter((m) => String(m.id) !== String(enriched.id))];
   saveStoredMovies(updated);
+  saveAdminMovie(enriched).catch(() => {});
   return updated;
 }
 
@@ -83,11 +99,13 @@ export function addCatalogMovie(movie) {
  * Update an existing movie in the catalog
  */
 export function updateCatalogMovie(updatedMovie) {
+  const enriched = enrichMovie(updatedMovie);
   const current = getStoredMovies();
   const updated = current.map((m) =>
-    m.id === updatedMovie.id ? { ...m, ...updatedMovie } : m,
+    String(m.id) === String(enriched.id) ? { ...m, ...enriched } : m,
   );
   saveStoredMovies(updated);
+  saveAdminMovie(enriched).catch(() => {});
   return updated;
 }
 
@@ -96,8 +114,9 @@ export function updateCatalogMovie(updatedMovie) {
  */
 export function deleteCatalogMovie(movieId) {
   const current = getStoredMovies();
-  const updated = current.filter((m) => m.id !== movieId);
+  const updated = current.filter((m) => String(m.id) !== String(movieId));
   saveStoredMovies(updated);
+  deleteAdminMovieFirestore(movieId).catch(() => {});
   return updated;
 }
 
@@ -110,7 +129,6 @@ export function resetTo15RealMovies() {
   return enriched;
 }
 
-// Backward compatibility alias
 export const resetTo100CatalogMovies = resetTo15RealMovies;
 
 /**
@@ -127,7 +145,6 @@ export async function syncFromLiveTmdb() {
   } catch (e) {
     console.error("Live TMDB sync failed:", e);
   }
-  // Fallback to static 15 real TMDB catalog if offline/error
   const fallback15 = TMDB_15_REAL_MOVIES.map(enrichMovie);
   saveStoredMovies(fallback15);
   return fallback15;
@@ -153,12 +170,26 @@ export function clearAllCatalogMovies() {
 }
 
 /**
- * Custom React Hook that keeps user & admin views 100% in sync in real-time
+ * Custom React Hook that keeps user & admin views 100% in sync with Firestore in real-time
  */
 export function useActiveMovies() {
-  const [movies, setMovies] = useState(getStoredMovies);
+  const [movies, setMovies] = useState(() => getStoredMovies());
 
   useEffect(() => {
+    // 1. Subscribe to Live Firestore Admin Movies Collection
+    const defaultList = TMDB_15_REAL_MOVIES.map(enrichMovie);
+    const unsub = listenAdminMovies(defaultList, (firestoreList) => {
+      if (firestoreList && firestoreList.length > 0) {
+        const enriched = firestoreList.map(enrichMovie);
+        setMovies(enriched);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(enriched));
+          localStorage.setItem(VERSION_KEY, "v5_firestore_sync");
+        } catch (e) {}
+      }
+    });
+
+    // 2. Local window event listener for immediate zero-latency tab sync
     const handleUpdate = () => {
       setMovies(getStoredMovies());
     };
@@ -167,6 +198,7 @@ export function useActiveMovies() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      if (typeof unsub === "function") unsub();
       window.removeEventListener(CATALOG_EVENT, handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

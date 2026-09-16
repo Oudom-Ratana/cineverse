@@ -13,13 +13,14 @@ import { useGetMovieDetailsQuery } from "../../services/api/movieApi";
 import { useGetTVDetailsQuery } from "../../services/api/tvApi";
 import BookingStepper from "../../components/booking/BookingStepper";
 import { BRANCH_SHOWTIMES } from "../../data/cinemaShowtimeData";
+import { findCatalogMovie } from "../../utils/movieCatalogService";
 
 export default function BookingConfirmedPage() {
   const [searchParams] = useSearchParams();
 
   // URL & Redux State
   const movieId =
-    searchParams.get("movie") || searchParams.get("movieId") || "558449";
+    searchParams.get("movie") || searchParams.get("movieId") || "969681";
   const hallType = (searchParams.get("hall") || "standard").toLowerCase();
   const time = searchParams.get("time") || "6:30 PM";
   const branch = searchParams.get("branch") || "Ciniverse SenSok";
@@ -35,17 +36,28 @@ export default function BookingConfirmedPage() {
 
   const booking = useSelector(selectBooking);
   const reduxMovie = booking?.movie;
+  const isReduxMatching =
+    reduxMovie &&
+    (String(reduxMovie.id) === String(movieId) ||
+      String(reduxMovie.tmdbId) === String(movieId));
+
+  const catalogMovie = useMemo(() => findCatalogMovie(movieId), [movieId]);
+
+  const mediaTypeParam = searchParams.get("mediaType");
   const isTV =
-    searchParams.get("mediaType") === "tv" ||
+    mediaTypeParam === "tv" ||
+    Boolean(catalogMovie?.isTv || catalogMovie?.media_type === "tv") ||
     Boolean(
-      reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title),
+      isReduxMatching &&
+        (reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title)),
     );
 
-  const { data: movieData } = useGetMovieDetailsQuery(movieId, {
-    skip: !movieId || isTV || Boolean(reduxMovie?.id),
+  const queryId = catalogMovie?.tmdbId || movieId;
+  const { data: movieData } = useGetMovieDetailsQuery(queryId, {
+    skip: !queryId || isTV || Boolean(catalogMovie) || isReduxMatching,
   });
-  const { data: tvData } = useGetTVDetailsQuery(movieId, {
-    skip: !movieId || !isTV || Boolean(reduxMovie?.id),
+  const { data: tvData } = useGetTVDetailsQuery(queryId, {
+    skip: !queryId || !isTV || Boolean(catalogMovie) || isReduxMatching,
   });
 
   const reduxSelectedSeats = useSelector(selectSelectedSeats);
@@ -100,11 +112,16 @@ export default function BookingConfirmedPage() {
     return [];
   }, [booking.concessions, concessionsParam]);
 
-  const movie = reduxMovie ||
-    (isTV ? tvData : movieData || tvData) || {
-      title: "Spider-Man: Brand New Day",
-      poster_path: null,
-    };
+  const movie = useMemo(() => {
+    if (isReduxMatching) return reduxMovie;
+    if (catalogMovie) return catalogMovie;
+    return (
+      (isTV ? tvData : movieData || tvData) || {
+        title: "Spider-Man: Brand New Day",
+        poster_path: null,
+      }
+    );
+  }, [isReduxMatching, reduxMovie, catalogMovie, isTV, tvData, movieData]);
 
   const rawScreenType =
     searchParams.get("screenType") || searchParams.get("format");

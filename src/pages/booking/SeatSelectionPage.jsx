@@ -33,6 +33,7 @@ import {
   getReservedSeatsForShowtime,
   getCouplePair,
 } from "../../data/seatLayoutData";
+import { findCatalogMovie } from "../../utils/movieCatalogService";
 
 export default function SeatSelectionPage() {
   const [searchParams] = useSearchParams();
@@ -41,7 +42,7 @@ export default function SeatSelectionPage() {
 
   // Query Parameters
   const movieId =
-    searchParams.get("movie") || searchParams.get("movieId") || "558449";
+    searchParams.get("movie") || searchParams.get("movieId") || "969681";
   const time = searchParams.get("time") || "03:00 PM";
   const branch = searchParams.get("branch") || "Ciniverse SenSok";
   const date = searchParams.get("date") || "Aug 26 Tue";
@@ -63,25 +64,46 @@ export default function SeatSelectionPage() {
     searchParams.get("screenType") || searchParams.get("format");
   const screenType = rawScreenType || (hallType === "gold" ? "GOLD" : "2D");
 
-  // Check if title is a TV series or if Redux already contains the movie/show
+  // Check if Redux already contains the movie/show AND matches current movieId
   const booking = useSelector(selectBooking);
   const reduxMovie = booking?.movie;
+  const isReduxMatching =
+    reduxMovie &&
+    (String(reduxMovie.id) === String(movieId) ||
+      String(reduxMovie.tmdbId) === String(movieId));
+
+  const catalogMovie = useMemo(() => findCatalogMovie(movieId), [movieId]);
+
   const mediaTypeParam = searchParams.get("mediaType");
   const isTV =
     mediaTypeParam === "tv" ||
+    Boolean(catalogMovie?.isTv || catalogMovie?.media_type === "tv") ||
     Boolean(
-      reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title),
+      isReduxMatching &&
+        (reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title)),
     );
 
-  // Fetch movie or TV details if not already present in Redux
-  const { data: movieData } = useGetMovieDetailsQuery(movieId, {
-    skip: !movieId || isTV || Boolean(reduxMovie?.id),
+  // Fetch movie or TV details if not present in catalog
+  const queryId = catalogMovie?.tmdbId || movieId;
+  const { data: movieData } = useGetMovieDetailsQuery(queryId, {
+    skip: !queryId || isTV || Boolean(catalogMovie) || isReduxMatching,
   });
-  const { data: tvData } = useGetTVDetailsQuery(movieId, {
-    skip: !movieId || !isTV || Boolean(reduxMovie?.id),
+  const { data: tvData } = useGetTVDetailsQuery(queryId, {
+    skip: !queryId || !isTV || Boolean(catalogMovie) || isReduxMatching,
   });
 
-  const movie = reduxMovie || (isTV ? tvData : movieData || tvData);
+  const movie = useMemo(() => {
+    if (isReduxMatching) return reduxMovie;
+    if (catalogMovie) return catalogMovie;
+    return (isTV ? tvData : movieData || tvData) || null;
+  }, [isReduxMatching, reduxMovie, catalogMovie, isTV, tvData, movieData]);
+
+  // Keep Redux in sync with the current URL movie
+  useEffect(() => {
+    if (movie && (!reduxMovie || String(reduxMovie.id) !== String(movie.id))) {
+      dispatch(setMovie(movie));
+    }
+  }, [movie, reduxMovie, dispatch]);
 
   // Redux Selected Seats & Theme
   const selectedSeats = useSelector(selectSelectedSeats);

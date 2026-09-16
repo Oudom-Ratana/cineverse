@@ -55,7 +55,10 @@ export default function FeaturedSeriesSection() {
               >
                 <MovieCard
                   basePath="/movies"
-                  movie={{ ...item, media_type: "tv" }}
+                  movie={{
+                    ...item,
+                    media_type: item.isTv ? "tv" : item.media_type || "tv",
+                  }}
                 />
               </ScrollReveal>
             ))}

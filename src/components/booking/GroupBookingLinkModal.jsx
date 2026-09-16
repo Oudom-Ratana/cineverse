@@ -25,7 +25,11 @@ export default function GroupBookingLinkModal({
   const isDark = theme === "dark";
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = `https://Ciniverse.com/group/${groupCode}`;
+  const baseUrl =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://ciniverse.vercel.app";
+  const shareUrl = `${baseUrl}/group/${groupCode}`;
 
   // Close modal on Escape key & Hide Navbar completely while modal is open
   useEffect(() => {

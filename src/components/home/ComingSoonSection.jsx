@@ -23,16 +23,30 @@ export default function ComingSoonSection() {
       (m) => m.status === "Upcoming",
     );
 
-    if (catalogUpcoming.length > 0) {
+    if (catalogUpcoming.length >= 3) {
       return catalogUpcoming.slice(0, 3).map((m) => ({
         ...m,
         release_date: m.date || m.year || "Coming Soon 2026",
       }));
     }
 
-    return rawList
-      .filter((m) => Boolean(m.backdrop_path || m.poster_path))
-      .slice(0, 3);
+    if (catalogUpcoming.length > 0) {
+      const remainingNeeded = 3 - catalogUpcoming.length;
+      const remaining = catalogMovies
+        .filter((m) => m.status !== "Upcoming")
+        .slice(0, remainingNeeded);
+      return [...catalogUpcoming, ...remaining].map((m) => ({
+        ...m,
+        release_date: m.date || m.year || "Coming Soon 2026",
+      }));
+    }
+
+    const fallbackList =
+      catalogMovies.length >= 3 ? catalogMovies.slice(0, 3) : rawList.slice(0, 3);
+    return fallbackList.map((m) => ({
+      ...m,
+      release_date: m.date || m.year || "Coming Soon 2026",
+    }));
   }, [catalogMovies, rawList]);
 
   return (

@@ -203,11 +203,29 @@ export async function createBooking(bookingData) {
 
   if (!isMockFirebase) {
     try {
+      // 1. Root level bookings collection (for Admin dashboard & analytics)
       await setDoc(doc(db, "bookings", bookingId), completeBooking);
+
       if (bookingData.userId) {
+        // 2. User specific tickets subcollection
         await setDoc(
           doc(db, "users", bookingData.userId, "tickets", bookingId),
           completeBooking,
+        );
+        // 3. User specific bookings history subcollection
+        await setDoc(
+          doc(db, "users", bookingData.userId, "bookings", bookingId),
+          completeBooking,
+        );
+        // 4. Update user document with recent booking activity
+        await setDoc(
+          doc(db, "users", bookingData.userId),
+          {
+            lastBookingAt: new Date().toISOString(),
+            lastBookingId: bookingId,
+            lastMovieBooked: bookingData.movie?.title || "Movie Ticket",
+          },
+          { merge: true },
         );
       }
     } catch (e) {
@@ -228,6 +246,7 @@ export async function createBooking(bookingData) {
     if (!exists) {
       userTickets.unshift(completeBooking);
       setLocalData(`tickets_${bookingData.userId}`, userTickets);
+      setLocalData(`bookings_${bookingData.userId}`, userTickets);
     }
   }
 
@@ -397,6 +416,47 @@ export function listenGroupSession(groupId, onUpdate) {
   };
   window.addEventListener("Ciniverse_storage_event", handleEvt);
   return () => window.removeEventListener("Ciniverse_storage_event", handleEvt);
+}
+
+export async function updateGroupSessionSeats(groupId, selectedSeats, user) {
+  if (!groupId) return;
+  const updateData = {
+    selectedSeats,
+    lastUpdatedBy: user?.displayName || user?.name || "Friend",
+    lastUpdatedAt: Date.now(),
+  };
+
+  if (!isMockFirebase) {
+    try {
+      await setDoc(doc(db, "groupSessions", groupId), updateData, { merge: true });
+    } catch (e) {
+      console.warn("Firestore updateGroupSessionSeats error:", e.message);
+    }
+  }
+
+  const groups = getLocalData("group_sessions", {});
+  if (groups[groupId]) {
+    groups[groupId] = { ...groups[groupId], ...updateData };
+    setLocalData("group_sessions", groups);
+  }
+}
+
+export async function joinGroupSession(groupId, user) {
+  if (!groupId || !user) return;
+  const member = {
+    uid: user.uid || user.id || `usr_${Math.random().toString(36).substring(2, 6)}`,
+    displayName: user.displayName || user.name || "Cinephile Friend",
+    avatar: user.avatar || user.photoURL || null,
+    joinedAt: Date.now(),
+  };
+
+  if (!isMockFirebase) {
+    try {
+      await setDoc(doc(db, `groupSessions/${groupId}/members`, member.uid), member);
+    } catch (e) {
+      console.warn("Firestore joinGroupSession error:", e.message);
+    }
+  }
 }
 
 export async function sendGroupChatMessage(groupId, messageData) {
@@ -1076,3 +1136,109 @@ export async function deleteAdminBranch(branchId) {
   setLocalData("admin_branches", updated);
   return updated;
 }
+
+/* -------------------------------------------------------------
+   7. ADMIN MANAGED MOVIES & CLIENT DISPLAY CATALOG
+------------------------------------------------------------- */
+export function listenAdminMovies(defaultMovies, onUpdate) {
+  if (!isMockFirebase) {
+    try {
+      const colRef = collection(db, "admin_movies");
+      return onSnapshot(colRef, (snap) => {
+        if (!snap.empty) {
+          const list = [];
+          snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+          onUpdate(list);
+          return;
+        } else if (defaultMovies && defaultMovies.length > 0) {
+          // Seed default movies to Firestore if empty
+          defaultMovies.forEach(async (m) => {
+            try {
+              await setDoc(doc(db, "admin_movies", String(m.id)), m);
+            } catch (err) {
+              /* ignore */
+            }
+          });
+          onUpdate(defaultMovies);
+          return;
+        }
+      });
+    } catch (e) {
+      console.warn("Firestore listenAdminMovies error:", e.message);
+    }
+  }
+
+  const check = () => {
+    const list = getLocalData("admin_movies", defaultMovies || []);
+    onUpdate(list);
+  };
+  check();
+
+  const handleEvt = (e) => {
+    if (e.detail?.key === "admin_movies") check();
+  };
+  window.addEventListener("Ciniverse_storage_event", handleEvt);
+  return () => window.removeEventListener("Ciniverse_storage_event", handleEvt);
+}
+
+export async function saveAdminMovie(movieData) {
+  const movieId = String(movieData.id || `mov_${Date.now()}`);
+  const record = {
+    ...movieData,
+    id: movieId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (!isMockFirebase) {
+    try {
+      await setDoc(doc(db, "admin_movies", movieId), record, {
+        merge: true,
+      });
+    } catch (e) {
+      console.warn("Firestore saveAdminMovie error:", e.message);
+    }
+  }
+
+  const current = getLocalData("admin_movies", []);
+  const index = current.findIndex((m) => String(m.id) === movieId);
+  const updated =
+    index >= 0
+      ? current.map((m) => (String(m.id) === movieId ? record : m))
+      : [record, ...current];
+  setLocalData("admin_movies", updated);
+  return record;
+}
+
+export async function saveAllAdminMovies(moviesList) {
+  if (!Array.isArray(moviesList)) return;
+
+  if (!isMockFirebase) {
+    try {
+      for (const m of moviesList) {
+        const docId = String(m.id);
+        await setDoc(doc(db, "admin_movies", docId), m, { merge: true });
+      }
+    } catch (e) {
+      console.warn("Firestore saveAllAdminMovies error:", e.message);
+    }
+  }
+
+  setLocalData("admin_movies", moviesList);
+}
+
+export async function deleteAdminMovie(movieId) {
+  const docId = String(movieId);
+  if (!isMockFirebase) {
+    try {
+      await deleteDoc(doc(db, "admin_movies", docId));
+    } catch (e) {
+      console.warn("Firestore deleteAdminMovie error:", e.message);
+    }
+  }
+
+  const current = getLocalData("admin_movies", []);
+  const updated = current.filter((m) => String(m.id) !== docId);
+  setLocalData("admin_movies", updated);
+  return updated;
+}
+

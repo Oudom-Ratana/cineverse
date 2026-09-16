@@ -39,6 +39,7 @@ const authSlice = createSlice({
       state.error = null;
       localStorage.removeItem("cinema_token");
       localStorage.removeItem("cinema_user");
+      localStorage.removeItem("Ciniverse_booked_tickets");
     },
     setError: (state, action) => {
       state.error = action.payload;

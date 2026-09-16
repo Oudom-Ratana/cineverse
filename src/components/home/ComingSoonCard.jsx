@@ -27,10 +27,14 @@ export default function ComingSoonCard({ item }) {
   const bannerUrl =
     item.banner ||
     (item.backdrop_path
-      ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
+      ? (item.backdrop_path.startsWith("http")
+          ? item.backdrop_path
+          : `https://image.tmdb.org/t/p/w780${item.backdrop_path}`)
       : item.poster_path
-        ? `https://image.tmdb.org/t/p/w780${item.poster_path}`
-        : "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80");
+        ? (item.poster_path.startsWith("http")
+            ? item.poster_path
+            : `https://image.tmdb.org/t/p/w780${item.poster_path}`)
+        : "https://image.tmdb.org/t/p/original/euYIwmwkmz95mnXvufEmbL69ovr.jpg");
 
   return (
     <Link
@@ -47,7 +51,9 @@ export default function ComingSoonCard({ item }) {
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              "https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?w=1200&auto=format&fit=crop&q=85";
+              item.poster_path && item.poster_path.startsWith("http")
+                ? item.poster_path
+                : "https://image.tmdb.org/t/p/original/euYIwmwkmz95mnXvufEmbL69ovr.jpg";
           }}
         />
       </div>
