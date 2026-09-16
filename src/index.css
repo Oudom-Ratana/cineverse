@@ -1,0 +1,325 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/ProductSans-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/ProductSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/ProductSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/ProductSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/ProductSans-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --primary-red: #b90101;
+    --accent-gold: #c8961e;
+    --bg-light: #f6f7f9;
+    --bg-pop-up-light-mode: rgba(39, 42, 48, 0.25);
+    --bg-pop-up-dark-mode: rgba(26, 31, 37, 0.4);
+
+    /* Glassmorphism - Light Mode */
+    --primary-color-5: rgba(39, 42, 48, 0.05);
+    --border-light-mode: rgba(39, 42, 48, 0.05);
+
+    /* Glassmorphism - Dark Mode */
+    --primary-color-30: rgba(39, 42, 48, 0.3);
+    --border-dark-mode: rgba(255, 255, 255, 0.2);
+
+    /* Figma Dark Mode Background: 2 layers (Front: Radial gradient, Behind: Pure black) */
+    --bg-dark-mode:
+      radial-gradient(
+        ellipse at 50% 50%,
+        rgba(109, 8, 8, 0.5) 0%,
+        #000000 100%
+      ),
+      #000000;
+  }
+
+  html {
+    font-size: 18px;
+    font-family: "Google Sans", sans-serif !important;
+  }
+
+  body,
+  #root {
+    background-color: #f6f7f9;
+    color: #171717;
+    font-family: "Google Sans", sans-serif !important;
+    font-size: 18px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  html.dark body,
+  body.dark,
+  .dark body {
+    background: var(--bg-dark-mode);
+    background-attachment: fixed;
+    color: #ffffff;
+  }
+
+  *,
+  *::before,
+  *::after,
+  input,
+  button,
+  textarea,
+  select,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  a,
+  label {
+    font-family: "Google Sans", sans-serif !important;
+  }
+}
+
+/* Glassmorphism - Light Mode */
+.glass {
+  background: var(--primary-color-5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid #dde1e7;
+  box-shadow: 0 8px 32px rgba(39, 42, 48, 0.08);
+}
+
+/* Custom Utilities for Project Colors & Theme */
+.bg-primary-red {
+  background-color: #b90101 !important;
+}
+
+.text-primary-red {
+  color: #b90101 !important;
+}
+
+.border-primary-red {
+  border-color: #b90101 !important;
+}
+
+.text-accent-gold {
+  color: #c8961e !important;
+}
+
+.text-dark {
+  color: #ffffff !important;
+}
+
+.bg-accent-gold {
+  background-color: #c8961e !important;
+}
+
+.fill-accent-gold {
+  fill: #c8961e !important;
+}
+
+.card-description,
+.description-text {
+  font-size: 18px !important;
+}
+
+.bg-light-theme {
+  background-color: #f6f7f9 !important;
+}
+
+.bg-dark-mode {
+  background: var(--bg-dark-mode) !important;
+  background-attachment: fixed;
+}
+
+.bg-cinema-radial {
+  background: var(--bg-dark-mode);
+}
+
+/* Hide scrollbars globally */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Cinema Animations */
+@keyframes cinema-float {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(3deg);
+  }
+}
+
+@keyframes cinema-float-delayed {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(-4deg);
+  }
+}
+
+@keyframes cinema-float-slow {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+@keyframes cinema-spotlight {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+    opacity: 0.85;
+  }
+  50% {
+    transform: rotate(5deg);
+    opacity: 1;
+  }
+}
+
+@keyframes cinema-projector-beam {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 0.6;
+    transform: scale(1.02);
+  }
+  60% {
+    opacity: 0.3;
+    transform: scale(0.99);
+  }
+  80% {
+    opacity: 0.55;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes cinema-audience-bob {
+  0%,
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.005);
+  }
+}
+
+@keyframes cinema-flicker {
+  0%,
+  100% {
+    opacity: 1;
+    text-shadow:
+      0 0 35px rgba(185, 1, 1, 0.75),
+      0 0 70px rgba(185, 1, 1, 0.4);
+  }
+  25% {
+    opacity: 0.94;
+    text-shadow:
+      0 0 25px rgba(185, 1, 1, 0.6),
+      0 0 50px rgba(185, 1, 1, 0.3);
+  }
+  50% {
+    opacity: 1;
+    text-shadow:
+      0 0 40px rgba(185, 1, 1, 0.8),
+      0 0 80px rgba(185, 1, 1, 0.45);
+  }
+  75% {
+    opacity: 0.92;
+    text-shadow:
+      0 0 28px rgba(185, 1, 1, 0.65),
+      0 0 55px rgba(185, 1, 1, 0.35);
+  }
+}
+
+.animate-cinema-float {
+  animation: cinema-float 6s ease-in-out infinite;
+}
+
+.animate-cinema-float-delayed {
+  animation: cinema-float-delayed 7s ease-in-out infinite 1.5s;
+}
+
+.animate-cinema-float-slow {
+  animation: cinema-float-slow 8.5s ease-in-out infinite 0.75s;
+}
+
+.animate-cinema-spotlight {
+  animation: cinema-spotlight 7s ease-in-out infinite alternate;
+  transform-origin: top left;
+}
+
+.animate-cinema-projector-beam {
+  animation: cinema-projector-beam 3.5s ease-in-out infinite;
+}
+
+.animate-cinema-audience {
+  animation: cinema-audience-bob 5s ease-in-out infinite;
+}
+
+.animate-cinema-flicker {
+  animation: cinema-flicker 4s ease-in-out infinite;
+}
+
+.cinema-glow-red {
+  text-shadow:
+    0 0 30px rgba(185, 1, 1, 0.7),
+    0 0 60px rgba(185, 1, 1, 0.35);
+}
