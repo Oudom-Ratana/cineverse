@@ -1,41 +1,62 @@
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import React, { Suspense, lazy } from "react";
+import { Routes, Route } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-import RootLayout from './layout/RootLayout';
-import AdminLayout from './layout/AdminLayout';
-import SpidermanLoader from './components/common/SpidermanLoader';
+import RootLayout from "./layout/RootLayout";
+import AdminLayout from "./layout/AdminLayout";
+import SpidermanLoader from "./components/common/SpidermanLoader";
 
 // Lazy load route pages for high performance
-const HomePage = lazy(() => import('./pages/HomePage'));
-const StreamPage = lazy(() => import('./pages/StreamPage'));
-const MovieDetailPage = lazy(() => import('./pages/MovieDetailPage'));
-const StreamMovieDetailPage = lazy(() => import('./pages/StreamMovieDetailPage'));
-const WatchPage = lazy(() => import('./pages/WatchPage'));
-const SeatSelectionPage = lazy(() => import('./pages/booking/SeatSelectionPage'));
-const BookingDetailsPage = lazy(() => import('./pages/booking/BookingDetailsPage'));
-const BookingConfirmedPage = lazy(() => import('./pages/booking/BookingConfirmedPage'));
-const GroupBookingRoom = lazy(() => import('./pages/GroupBookingRoom'));
-const PromotionPage = lazy(() => import('./pages/promotions/PromotionPage'));
-const DetailPage = lazy(() => import('./pages/promotions/DetailPage'));
-const AboutUsPage = lazy(() => import('./pages/AboutUsPage'));
-const FavouritePage = lazy(() => import('./pages/FavouritePage'));
-const MyTicketsPage = lazy(() => import('./pages/MyTicketsPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const ProfileSetup = lazy(() => import('./pages/ProfileSetup'));
-const LoginComponent = lazy(() => import('./components/auth/LoginComponent'));
-const SignUpComponent = lazy(() => import('./components/auth/SignUpComponent'));
-const ForgotPassword = lazy(() => import('./components/auth/ForgotPassword'));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const StreamPage = lazy(() => import("./pages/StreamPage"));
+const MovieDetailPage = lazy(() => import("./pages/MovieDetailPage"));
+const StreamMovieDetailPage = lazy(
+  () => import("./pages/StreamMovieDetailPage"),
+);
+const WatchPage = lazy(() => import("./pages/WatchPage"));
+const SeatSelectionPage = lazy(
+  () => import("./pages/booking/SeatSelectionPage"),
+);
+const BookingDetailsPage = lazy(
+  () => import("./pages/booking/BookingDetailsPage"),
+);
+const BookingConfirmedPage = lazy(
+  () => import("./pages/booking/BookingConfirmedPage"),
+);
+const GroupBookingRoom = lazy(() => import("./pages/GroupBookingRoom"));
+const GroupBookingRedirect = lazy(
+  () => import("./pages/booking/GroupBookingRedirect"),
+);
+const PromotionPage = lazy(() => import("./pages/promotions/PromotionPage"));
+const DetailPage = lazy(() => import("./pages/promotions/DetailPage"));
+const AboutUsPage = lazy(() => import("./pages/AboutUsPage"));
+const FavouritePage = lazy(() => import("./pages/FavouritePage"));
+const MyTicketsPage = lazy(() => import("./pages/MyTicketsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const ProfileSetup = lazy(() => import("./pages/ProfileSetup"));
+const LoginComponent = lazy(() => import("./components/auth/LoginComponent"));
+const SignUpComponent = lazy(() => import("./components/auth/SignUpComponent"));
+const ForgotPassword = lazy(() => import("./components/auth/ForgotPassword"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 // Admin Pages
-const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const AdminMovieLibraryPage = lazy(() => import('./pages/admin/AdminMovieLibraryPage'));
-const AdminCinemaBranchPage = lazy(() => import('./pages/admin/AdminCinemaBranchPage'));
-const AdminShowtimesPage = lazy(() => import('./pages/admin/AdminShowtimesPage'));
-const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
-const AdminUserAnalyticsPage = lazy(() => import('./pages/admin/AdminUserAnalyticsPage'));
+const AdminDashboardPage = lazy(
+  () => import("./pages/admin/AdminDashboardPage"),
+);
+const AdminMovieLibraryPage = lazy(
+  () => import("./pages/admin/AdminMovieLibraryPage"),
+);
+const AdminCinemaBranchPage = lazy(
+  () => import("./pages/admin/AdminCinemaBranchPage"),
+);
+const AdminShowtimesPage = lazy(
+  () => import("./pages/admin/AdminShowtimesPage"),
+);
+const AdminUsersPage = lazy(() => import("./pages/admin/AdminUsersPage"));
+const AdminUserAnalyticsPage = lazy(
+  () => import("./pages/admin/AdminUserAnalyticsPage"),
+);
 
 // Route Suspense Fallback
 const RouteSuspenseFallback = () => (
@@ -58,12 +79,19 @@ export default function App() {
             <Route path="movies/:id/watch" element={<WatchPage />} />
             <Route path="tv/:id/watch" element={<WatchPage />} />
             <Route path="movies/:id/book" element={<SeatSelectionPage />} />
-            
+
             {/* Booking Flow */}
             <Route path="booking/seats" element={<SeatSelectionPage />} />
             <Route path="booking/details" element={<BookingDetailsPage />} />
-            <Route path="booking/confirmed" element={<BookingConfirmedPage />} />
-            <Route path="booking/group/:groupId" element={<GroupBookingRoom />} />
+            <Route
+              path="booking/confirmed"
+              element={<BookingConfirmedPage />}
+            />
+            <Route
+              path="booking/group/:groupId"
+              element={<GroupBookingRedirect />}
+            />
+            <Route path="group/:groupId" element={<GroupBookingRedirect />} />
 
             {/* Promotions */}
             <Route path="promo" element={<PromotionPage />}>

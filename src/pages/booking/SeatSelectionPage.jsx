@@ -12,7 +12,17 @@ import {
   selectBooking,
 } from "../../redux/slices/bookingSlice";
 import { selectTheme } from "../../redux/slices/uiSlice";
-import { selectIsAuthenticated } from "../../redux/slices/authSlice";
+import {
+  selectIsAuthenticated,
+  selectCurrentUser,
+} from "../../redux/slices/authSlice";
+import { useAuth } from "../../context/AuthContext";
+import {
+  createGroupSession,
+  listenGroupSession,
+  joinGroupSession,
+  toggleGroupMemberSeat,
+} from "../../services/firestoreService";
 import { useGetMovieDetailsQuery } from "../../services/api/movieApi";
 import { useGetTVDetailsQuery } from "../../services/api/tvApi";
 
@@ -80,7 +90,7 @@ export default function SeatSelectionPage() {
     Boolean(catalogMovie?.isTv || catalogMovie?.media_type === "tv") ||
     Boolean(
       isReduxMatching &&
-        (reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title)),
+      (reduxMovie?.first_air_date || (reduxMovie?.name && !reduxMovie?.title)),
     );
 
   // Fetch movie or TV details if not present in catalog
@@ -110,11 +120,29 @@ export default function SeatSelectionPage() {
   const theme = useSelector(selectTheme);
   const isDark = theme === "dark";
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const reduxUser = useSelector(selectCurrentUser);
+  const { user: authUser } = useAuth();
+  const user = reduxUser || authUser;
+
+  // Real user profile info
+  const currentUserId = String(user?.uid || user?.id || "host_guest");
+  const currentUserName =
+    user?.name || user?.displayName || user?.email?.split("@")[0] || "You";
+  const currentUserAvatar = user?.avatar || user?.photoURL || null;
+  const currentUserInitials = (currentUserName || "U")
+    .slice(0, 2)
+    .toUpperCase();
+
   const location = useLocation();
 
   // 3-Minute Countdown Timer
   const [timeLeft, setTimeLeft] = useState(180);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+  // Group Session State & Real-time Firestore Sync
+  const urlGroupId = searchParams.get("groupId");
+  const [groupId, setGroupId] = useState(urlGroupId || "");
+  const [groupSessionData, setGroupSessionData] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -129,21 +157,67 @@ export default function SeatSelectionPage() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Group session initializer & listener
+  useEffect(() => {
+    if (bookingType !== "group") return;
+
+    let activeGroupId = urlGroupId || groupId;
+    if (!activeGroupId) {
+      activeGroupId = `GRP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      setGroupId(activeGroupId);
+      const params = new URLSearchParams(searchParams);
+      params.set("groupId", activeGroupId);
+      navigate(`/booking/seats?${params.toString()}`, { replace: true });
+    }
+
+    createGroupSession({
+      groupId: activeGroupId,
+      movieId,
+      movieTitle: movie?.title || movie?.name || "Movie",
+      date,
+      time,
+      hall: hallType,
+      screenType,
+      leaderId: currentUserId,
+      leaderName: currentUserName,
+      leaderAvatar: currentUserAvatar,
+    }).catch(() => {});
+
+    joinGroupSession(activeGroupId, {
+      uid: currentUserId,
+      name: currentUserName,
+      avatar: currentUserAvatar,
+      color: "#FFD700",
+    }).catch(() => {});
+
+    const unsub = listenGroupSession(activeGroupId, (data) => {
+      if (data) {
+        setGroupSessionData(data);
+      }
+    });
+
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, [
+    bookingType,
+    urlGroupId,
+    groupId,
+    movieId,
+    movie?.title,
+    movie?.name,
+    date,
+    time,
+    hallType,
+    screenType,
+    currentUserId,
+    currentUserName,
+    currentUserAvatar,
+  ]);
+
   // Clear selected seats whenever showtime or hall changes
   useEffect(() => {
     dispatch(clearSeats());
-    // In group booking mode, preselect C3 for the user so they see their seat with avatar immediately
-    if (bookingType === "group") {
-      dispatch(
-        toggleSeat({
-          id: "C3",
-          row: "C",
-          number: 3,
-          type: "single",
-          price: STANDARD_SINGLE_PRICE,
-        }),
-      );
-    }
   }, [movieId, time, date, hallType, bookingType, dispatch]);
 
   // Dynamic showtime-specific reserved seats
@@ -155,53 +229,61 @@ export default function SeatSelectionPage() {
   const isSeatReserved = (seatId) => reservedSeatsSet.has(seatId);
 
   // Group seat avatars: shows live presence members on the map
-  // Friends took F6 & B8; You took your selected seats (default C3)
   const groupSeatAvatars = useMemo(() => {
     if (bookingType !== "group") return {};
 
-    const map = {
-      F6: {
-        avatar:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        color: "#3B82F6",
-        name: "Capibarra",
-        initials: "C",
-        isLocked: true,
-      },
-      B8: {
-        avatar:
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-        color: "#10B981",
-        name: "Kapoy",
-        initials: "K",
-        isLocked: true,
-      },
-    };
+    const map = {};
 
-    // Current user's selected seats get the gold ring avatar
+    // 1. Friends' seats from Firestore session
+    const remoteSeats = groupSessionData?.selectedSeats || {};
+    Object.entries(remoteSeats).forEach(([seatId, sData]) => {
+      if (String(sData?.uid) !== currentUserId) {
+        map[seatId] = {
+          avatar: sData.avatar || null,
+          color: sData.color || "#3B82F6",
+          name: sData.name || "Friend",
+          initials: (sData.name || "F").slice(0, 2).toUpperCase(),
+          isLocked: true, // Cannot be selected by current user
+        };
+      }
+    });
+
+    // 2. Current user's selected seats (Gold border, real user avatar)
     selectedSeats.forEach((seat) => {
       map[seat.id] = {
-        avatar:
-          "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80",
+        avatar: currentUserAvatar,
         color: "#FFD700",
-        name: "You",
-        initials: "U",
+        name: currentUserName,
+        initials: currentUserInitials,
         isLocked: false,
       };
     });
 
     return map;
-  }, [bookingType, selectedSeats]);
+  }, [
+    bookingType,
+    groupSessionData?.selectedSeats,
+    currentUserId,
+    currentUserAvatar,
+    currentUserName,
+    currentUserInitials,
+    selectedSeats,
+  ]);
 
   // Switch Booking Type (Standard vs Group)
   const handleBookingTypeChange = (newType) => {
-    if (newType === "group") {
-      setIsGroupModalOpen(true);
-    }
-    if (newType === bookingType) return;
     const params = new URLSearchParams(searchParams);
     params.set("type", newType);
     params.set("screenType", screenType);
+    if (newType === "group") {
+      const activeGId =
+        urlGroupId ||
+        groupId ||
+        `GRP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      setGroupId(activeGId);
+      params.set("groupId", activeGId);
+      setIsGroupModalOpen(true);
+    }
     navigate(`/booking/seats?${params.toString()}`, { replace: true });
   };
 
@@ -210,7 +292,10 @@ export default function SeatSelectionPage() {
     const seatId = `${row}${colNumber}`;
 
     // Friends' seats in group mode cannot be selected/deselected by you
-    if (bookingType === "group" && (seatId === "F6" || seatId === "B8")) {
+    if (bookingType === "group" && groupSeatAvatars[seatId]?.isLocked) {
+      toast.info(
+        `Seat ${seatId} is already selected by ${groupSeatAvatars[seatId].name}`,
+      );
       return;
     }
 
@@ -247,10 +332,50 @@ export default function SeatSelectionPage() {
         // Deselect both
         dispatch(toggleSeat(seat1Obj));
         dispatch(toggleSeat(seat2Obj));
+        const activeGroupId = urlGroupId || groupId;
+        if (bookingType === "group" && activeGroupId) {
+          toggleGroupMemberSeat(
+            activeGroupId,
+            seatId1,
+            { uid: currentUserId },
+            false,
+          ).catch(() => {});
+          toggleGroupMemberSeat(
+            activeGroupId,
+            seatId2,
+            { uid: currentUserId },
+            false,
+          ).catch(() => {});
+        }
       } else {
         // Select both seats together
         if (!is1Selected) dispatch(toggleSeat(seat1Obj));
         if (!is2Selected) dispatch(toggleSeat(seat2Obj));
+        const activeGroupId = urlGroupId || groupId;
+        if (bookingType === "group" && activeGroupId) {
+          toggleGroupMemberSeat(
+            activeGroupId,
+            seatId1,
+            {
+              uid: currentUserId,
+              name: currentUserName,
+              avatar: currentUserAvatar,
+              color: "#FFD700",
+            },
+            true,
+          ).catch(() => {});
+          toggleGroupMemberSeat(
+            activeGroupId,
+            seatId2,
+            {
+              uid: currentUserId,
+              name: currentUserName,
+              avatar: currentUserAvatar,
+              color: "#FFD700",
+            },
+            true,
+          ).catch(() => {});
+        }
       }
       return;
     }
@@ -259,6 +384,7 @@ export default function SeatSelectionPage() {
     if (isSeatReserved(seatId)) return;
 
     const seatPrice = hallType === "gold" ? GOLD_PRICE : STANDARD_SINGLE_PRICE;
+    const isSelecting = !isSeatSelected(seatId);
 
     dispatch(
       toggleSeat({
@@ -269,6 +395,21 @@ export default function SeatSelectionPage() {
         price: seatPrice,
       }),
     );
+
+    const activeGroupId = urlGroupId || groupId;
+    if (bookingType === "group" && activeGroupId) {
+      toggleGroupMemberSeat(
+        activeGroupId,
+        seatId,
+        {
+          uid: currentUserId,
+          name: currentUserName,
+          avatar: currentUserAvatar,
+          color: "#FFD700",
+        },
+        isSelecting,
+      ).catch(() => {});
+    }
   };
 
   // Each user chooses their own seat and pays for their own seat!
@@ -423,7 +564,23 @@ export default function SeatSelectionPage() {
 
         {/* 6. Legend: Standard or Group Legend with Live Presence */}
         {bookingType === "group" ? (
-          <GroupSeatLegend mySeats={selectedSeats.map((s) => s.id)} />
+          <GroupSeatLegend
+            mySeats={selectedSeats.map((s) => s.id)}
+            members={
+              groupSessionData?.members && groupSessionData.members.length > 0
+                ? groupSessionData.members
+                : [
+                    {
+                      uid: currentUserId,
+                      name: currentUserName,
+                      avatar: currentUserAvatar,
+                      color: "#FFD700",
+                    },
+                  ]
+            }
+            selectedSeatsMap={groupSessionData?.selectedSeats || {}}
+            onInviteClick={() => setIsGroupModalOpen(true)}
+          />
         ) : (
           <SeatLegend />
         )}
@@ -442,7 +599,12 @@ export default function SeatSelectionPage() {
           isOpen={isGroupModalOpen}
           onClose={() => setIsGroupModalOpen(false)}
           onContinue={() => setIsGroupModalOpen(false)}
-          groupCode="ABCD1234"
+          groupCode={urlGroupId || groupId || "GRP-ROOM"}
+          movieId={movieId}
+          date={date}
+          time={time}
+          hall={hallType}
+          screenType={screenType}
         />
       </div>
     </div>

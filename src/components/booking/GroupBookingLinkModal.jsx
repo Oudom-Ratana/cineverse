@@ -20,6 +20,11 @@ export default function GroupBookingLinkModal({
   onClose,
   onContinue,
   groupCode = "ABCD1234",
+  movieId,
+  date,
+  time,
+  hall,
+  screenType,
 }) {
   const theme = useSelector(selectTheme);
   const isDark = theme === "dark";
@@ -29,7 +34,17 @@ export default function GroupBookingLinkModal({
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
       : "https://ciniverse.vercel.app";
-  const shareUrl = `${baseUrl}/group/${groupCode}`;
+
+  const params = new URLSearchParams();
+  if (movieId) params.set("movieId", movieId);
+  if (date) params.set("date", date);
+  if (time) params.set("time", time);
+  if (hall) params.set("hall", hall);
+  if (screenType) params.set("screenType", screenType);
+  params.set("type", "group");
+  params.set("groupId", groupCode);
+
+  const shareUrl = `${baseUrl}/booking/seats?${params.toString()}`;
 
   // Close modal on Escape key & Hide Navbar completely while modal is open
   useEffect(() => {

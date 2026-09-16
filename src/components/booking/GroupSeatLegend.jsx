@@ -1,60 +1,41 @@
 import { useSelector } from "react-redux";
 import { selectTheme } from "../../redux/slices/uiSlice";
-import { Users, Info } from "lucide-react";
-
-/**
- * Group members data matching the Figma designs:
- * - You (Host/Guest): curly-haired smiling young man (Gold ring: #FFD700)
- * - Capibarra: woman with scarf (Blue ring: #3B82F6)
- * - Kapoy: man with sunglasses/hat (Green ring: #10B981)
- */
-export const GROUP_MEMBERS = [
-  {
-    id: "you",
-    name: "You",
-    avatar:
-      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80",
-    fallbackBg: "#EAB308",
-    initials: "U",
-    color: "#FFD700",
-    defaultSeat: "C3",
-  },
-  {
-    id: "capibarra",
-    name: "Capibarra",
-    avatar:
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    fallbackBg: "#3B82F6",
-    initials: "C",
-    color: "#3B82F6",
-    defaultSeat: "F6",
-  },
-  {
-    id: "kapoy",
-    name: "Kapoy",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    fallbackBg: "#10B981",
-    initials: "K",
-    color: "#10B981",
-    defaultSeat: "B8",
-  },
-];
+import { selectCurrentUser } from "../../redux/slices/authSlice";
+import { useAuth } from "../../context/AuthContext";
+import { Users, Info, Plus, Share2 } from "lucide-react";
 
 const getFallbackSvg = (initials, bg) =>
-  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${encodeURIComponent(bg)}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="38" fill="%23ffffff">${initials}</text></svg>`;
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${encodeURIComponent(bg)}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="36" fill="%23ffffff">${initials}</text></svg>`;
 
-export default function GroupSeatLegend({ mySeats = [] }) {
+export default function GroupSeatLegend({
+  mySeats = [],
+  members = [],
+  selectedSeatsMap = {},
+  onInviteClick,
+}) {
   const theme = useSelector(selectTheme);
   const isDark = theme === "dark";
 
-  const me = GROUP_MEMBERS[0];
-  const capibarra = GROUP_MEMBERS[1];
-  const kapoy = GROUP_MEMBERS[2];
+  const reduxUser = useSelector(selectCurrentUser);
+  const { user: authUser } = useAuth();
+  const user = reduxUser || authUser;
+
+  // Real logged-in user profile details
+  const myName =
+    user?.name || user?.displayName || user?.email?.split("@")[0] || "You";
+  const myAvatar = user?.avatar || user?.photoURL || null;
+  const myInitials = (myName || "U").slice(0, 2).toUpperCase();
+  const myColor = "#FFD700"; // Gold ring for current user
+
+  // Friends connected to this group session in Firestore
+  const myUid = String(user?.uid || user?.id || "host");
+  const friends = Array.isArray(members)
+    ? members.filter((m) => String(m.uid) !== myUid)
+    : [];
 
   const mySeatLabel = mySeats.length > 0 ? mySeats.join(", ") : "Select a seat";
 
-  // Exact project Glassmorphic tokens
+  // Glassmorphic design tokens
   const glassCardStyle = {
     backgroundColor: isDark
       ? "var(--primary-color-30)"
@@ -65,7 +46,7 @@ export default function GroupSeatLegend({ mySeats = [] }) {
   };
 
   return (
-    <div className="w-full space-y-3 pt-2 select-none">
+    <div className="w-full space-y-3 pt-2 select-none font-sans">
       {/* 2-Card Layout matching Figma */}
       <div className="flex flex-col md:flex-row items-stretch gap-4">
         {/* ── Left Card: Legend + Your Seat / Friends Seat ── */}
@@ -94,7 +75,7 @@ export default function GroupSeatLegend({ mySeats = [] }) {
             </div>
           </div>
 
-          {/* Thin subtle divider */}
+          {/* Divider */}
           <div className="border-t border-neutral-300/60 dark:border-white/15 my-2" />
 
           {/* Row 2: YOUR SEAT / FRIENDS SEAT */}
@@ -102,18 +83,15 @@ export default function GroupSeatLegend({ mySeats = [] }) {
             {/* YOUR SEAT */}
             <div className="flex flex-col items-center gap-2">
               <div
-                className="w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-md transition-transform hover:scale-105"
-                style={{ borderColor: me.color }}
+                className="w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-md transition-transform hover:scale-105 bg-neutral-800"
+                style={{ borderColor: myColor }}
               >
                 <img
-                  src={me.avatar}
-                  alt="Your avatar"
+                  src={myAvatar || getFallbackSvg(myInitials, "#EAB308")}
+                  alt={myName}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = getFallbackSvg(
-                      me.initials,
-                      me.fallbackBg,
-                    );
+                    e.currentTarget.src = getFallbackSvg(myInitials, "#EAB308");
                   }}
                 />
               </div>
@@ -124,42 +102,54 @@ export default function GroupSeatLegend({ mySeats = [] }) {
 
             {/* FRIENDS SEAT */}
             <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center -space-x-2.5">
-                <div
-                  className="w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-md relative z-10 transition-transform hover:scale-105"
-                  style={{ borderColor: capibarra.color }}
-                >
-                  <img
-                    src={capibarra.avatar}
-                    alt={capibarra.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = getFallbackSvg(
-                        capibarra.initials,
-                        capibarra.fallbackBg,
-                      );
-                    }}
-                  />
+              {friends.length > 0 ? (
+                <div className="flex items-center -space-x-2.5">
+                  {friends.slice(0, 3).map((friend, idx) => {
+                    const friendInitials = (friend.name || "F")
+                      .slice(0, 2)
+                      .toUpperCase();
+                    const friendColor = friend.color || "#3B82F6";
+                    return (
+                      <div
+                        key={friend.uid || idx}
+                        className="w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-md relative bg-neutral-800 transition-transform hover:scale-105"
+                        style={{
+                          borderColor: friendColor,
+                          zIndex: 10 - idx,
+                        }}
+                      >
+                        <img
+                          src={
+                            friend.avatar ||
+                            getFallbackSvg(friendInitials, friendColor)
+                          }
+                          alt={friend.name || "Friend"}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = getFallbackSvg(
+                              friendInitials,
+                              friendColor,
+                            );
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-                <div
-                  className="w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-md relative z-0 transition-transform hover:scale-105"
-                  style={{ borderColor: kapoy.color }}
+              ) : (
+                <button
+                  type="button"
+                  onClick={onInviteClick}
+                  className="w-12 h-12 rounded-full border-2 border-dashed border-neutral-400 dark:border-white/30 flex items-center justify-center text-neutral-400 hover:text-[#B90101] hover:border-[#B90101] dark:hover:text-[#B90101] dark:hover:border-[#B90101] transition hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Invite friends to join"
                 >
-                  <img
-                    src={kapoy.avatar}
-                    alt={kapoy.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = getFallbackSvg(
-                        kapoy.initials,
-                        kapoy.fallbackBg,
-                      );
-                    }}
-                  />
-                </div>
-              </div>
+                  <Plus className="w-5 h-5" />
+                </button>
+              )}
               <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-neutral-800 dark:text-neutral-200">
-                FRIENDS SEAT
+                {friends.length > 0
+                  ? `FRIENDS SEAT (${friends.length})`
+                  : "FRIENDS SEAT"}
               </span>
             </div>
           </div>
@@ -167,39 +157,44 @@ export default function GroupSeatLegend({ mySeats = [] }) {
 
         {/* ── Right Card: LIVE PRESENCE ── */}
         <div
-          className="w-full md:w-64 rounded-2xl sm:rounded-3xl border p-5 sm:p-6 shadow-sm backdrop-blur-md flex flex-col justify-between"
+          className="w-full md:w-72 rounded-2xl sm:rounded-3xl border p-5 sm:p-6 shadow-sm backdrop-blur-md flex flex-col justify-between"
           style={glassCardStyle}
         >
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <h4 className="text-sm sm:text-base font-black text-[#B90101] uppercase tracking-wider">
-                LIVE PRESENCE
-              </h4>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm sm:text-base font-black text-[#B90101] uppercase tracking-wider">
+                  LIVE PRESENCE
+                </h4>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <span className="text-[11px] font-bold text-neutral-500">
+                {1 + friends.length} Online
+              </span>
             </div>
 
             <div className="space-y-3">
-              {/* You */}
+              {/* You (Host / Current User) */}
               <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-full overflow-hidden border-[2.5px] shadow-sm shrink-0"
-                  style={{ borderColor: me.color }}
+                  className="w-10 h-10 rounded-full overflow-hidden border-[2.5px] shadow-sm shrink-0 bg-neutral-800"
+                  style={{ borderColor: myColor }}
                 >
                   <img
-                    src={me.avatar}
-                    alt={me.name}
+                    src={myAvatar || getFallbackSvg(myInitials, "#EAB308")}
+                    alt={myName}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       e.currentTarget.src = getFallbackSvg(
-                        me.initials,
-                        me.fallbackBg,
+                        myInitials,
+                        "#EAB308",
                       );
                     }}
                   />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white truncate">
-                    {me.name} (You)
+                    {myName} (You)
                   </p>
                   <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                     Seat {mySeatLabel}
@@ -207,61 +202,78 @@ export default function GroupSeatLegend({ mySeats = [] }) {
                 </div>
               </div>
 
-              {/* Capibarra */}
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-full overflow-hidden border-[2.5px] shadow-sm shrink-0"
-                  style={{ borderColor: capibarra.color }}
-                >
-                  <img
-                    src={capibarra.avatar}
-                    alt={capibarra.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = getFallbackSvg(
-                        capibarra.initials,
-                        capibarra.fallbackBg,
-                      );
-                    }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white truncate">
-                    {capibarra.name}
-                  </p>
-                  <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
-                    Seat {capibarra.defaultSeat}
-                  </p>
-                </div>
-              </div>
+              {/* Real Friends Connected in Session */}
+              {friends.map((friend, idx) => {
+                const friendInitials = (friend.name || "F")
+                  .slice(0, 2)
+                  .toUpperCase();
+                const friendColor = friend.color || "#3B82F6";
 
-              {/* Kapoy */}
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-full overflow-hidden border-[2.5px] shadow-sm shrink-0"
-                  style={{ borderColor: kapoy.color }}
-                >
-                  <img
-                    src={kapoy.avatar}
-                    alt={kapoy.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = getFallbackSvg(
-                        kapoy.initials,
-                        kapoy.fallbackBg,
-                      );
-                    }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white truncate">
-                    {kapoy.name}
+                // Find seats taken by this friend
+                const friendSeats = Object.entries(selectedSeatsMap)
+                  .filter(
+                    ([_, data]) => String(data?.uid) === String(friend.uid),
+                  )
+                  .map(([seatId]) => seatId);
+
+                const friendSeatLabel =
+                  friendSeats.length > 0
+                    ? friendSeats.join(", ")
+                    : "Choosing seat...";
+
+                return (
+                  <div
+                    key={friend.uid || idx}
+                    className="flex items-center gap-3"
+                  >
+                    <div
+                      className="w-10 h-10 rounded-full overflow-hidden border-[2.5px] shadow-sm shrink-0 bg-neutral-800"
+                      style={{ borderColor: friendColor }}
+                    >
+                      <img
+                        src={
+                          friend.avatar ||
+                          getFallbackSvg(friendInitials, friendColor)
+                        }
+                        alt={friend.name || "Friend"}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = getFallbackSvg(
+                            friendInitials,
+                            friendColor,
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white truncate">
+                        {friend.name || "Friend"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                        Seat {friendSeatLabel}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Empty state if no friends have joined yet */}
+              {friends.length === 0 && (
+                <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-dashed border-neutral-300 dark:border-white/10 text-center space-y-2">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
+                    No friends joined yet. Share your invite link to pick seats
+                    together!
                   </p>
-                  <p className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
-                    Seat {kapoy.defaultSeat}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={onInviteClick}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#B90101] hover:brightness-110 text-white text-[11px] font-bold shadow-xs transition active:scale-95 cursor-pointer"
+                  >
+                    <Share2 className="w-3 h-3" />
+                    <span>Invite Friends</span>
+                  </button>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

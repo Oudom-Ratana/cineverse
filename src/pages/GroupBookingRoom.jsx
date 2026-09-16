@@ -1,25 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import SEO from '../components/common/SEO';
-import SeatMap from '../components/booking/SeatMap';
-import GroupChatPanel from '../components/group/GroupChatPanel';
-import { useAuth } from '../context/AuthContext';
-import { useWebSocket } from '../context/WebSocketContext';
-import { listenGroupSession } from '../services/firestoreService';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import SEO from "../components/common/SEO";
+import SeatMap from "../components/booking/SeatMap";
+import GroupChatPanel from "../components/group/GroupChatPanel";
+import { useAuth } from "../context/AuthContext";
+import { useWebSocket } from "../context/WebSocketContext";
+import { listenGroupSession } from "../services/firestoreService";
 import {
   setGroupSession,
   setGroupMembers,
-} from '../redux/slices/groupSessionSlice';
+} from "../redux/slices/groupSessionSlice";
 import {
   setSelectedShowtime,
   setBookingMovie,
   setStep,
   setGroupMode,
-} from '../redux/slices/bookingSlice';
-import { Users, Sparkles, Copy, Check, Share2, Shield, QrCode, ArrowLeft } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { formatCurrency } from '../utils/formatters';
+} from "../redux/slices/bookingSlice";
+import {
+  Users,
+  Sparkles,
+  Copy,
+  Check,
+  Share2,
+  Shield,
+  QrCode,
+  ArrowLeft,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { formatCurrency } from "../utils/formatters";
 
 export default function GroupBookingRoom() {
   const { groupId } = useParams();
@@ -29,8 +38,12 @@ export default function GroupBookingRoom() {
   const { joinGroup, leaveGroup, proceedCheckout } = useWebSocket();
 
   const groupState = useSelector((state) => state.groupSession);
-  const isCheckoutTriggered = useSelector((state) => state.groupSession.isCheckoutTriggered);
-  const groupSelectedSeats = useSelector((state) => state.groupSession.groupSelectedSeats);
+  const isCheckoutTriggered = useSelector(
+    (state) => state.groupSession.isCheckoutTriggered,
+  );
+  const groupSelectedSeats = useSelector(
+    (state) => state.groupSession.groupSelectedSeats,
+  );
 
   const [sessionData, setSessionData] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -41,11 +54,14 @@ export default function GroupBookingRoom() {
   useEffect(() => {
     if (!groupId) return;
     const unsub = listenGroupSession(groupId, (data) => {
+      if (!data) return;
       setSessionData(data);
-      if (data.members) dispatch(setGroupMembers(data.members));
+      if (data.members && Array.isArray(data.members)) {
+        dispatch(setGroupMembers(data.members));
+      }
     });
     return () => {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsub === "function") unsub();
     };
   }, [groupId, dispatch]);
 
@@ -54,7 +70,7 @@ export default function GroupBookingRoom() {
     if (groupId) {
       joinGroup(groupId, {
         uid: user?.uid || `usr_${Math.random().toString(36).substring(2, 7)}`,
-        displayName: user?.displayName || 'Cinephile Guest',
+        displayName: user?.displayName || "Cinephile Guest",
         photoURL: user?.photoURL || null,
       });
     }
@@ -74,7 +90,9 @@ export default function GroupBookingRoom() {
     }
   }, [isCheckoutTriggered, sessionData, dispatch, groupId, navigate]);
 
-  const isLeader = Boolean(sessionData && user && sessionData.leaderId === user.uid);
+  const isLeader = Boolean(
+    sessionData && user && sessionData.leaderId === user.uid,
+  );
   const shareableUrl = window.location.href;
 
   const handleCopy = () => {
@@ -102,7 +120,9 @@ export default function GroupBookingRoom() {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-white">
         <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-xs text-slate-400">Connecting to Multiplayer Room...</p>
+        <p className="text-xs text-slate-400">
+          Connecting to Multiplayer Room...
+        </p>
       </div>
     );
   }
@@ -122,13 +142,16 @@ export default function GroupBookingRoom() {
               <Users className="w-3.5 h-3.5" />
               Live Multiplayer Room
             </span>
-            <span className="text-xs font-mono text-slate-400">Room: {groupId}</span>
+            <span className="text-xs font-mono text-slate-400">
+              Room: {groupId}
+            </span>
           </div>
           <h1 className="font-display font-black text-2xl text-white">
             {sessionData.movie?.title}
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            {sessionData.showtime?.date} at {sessionData.showtime?.time} • {sessionData.showtime?.hallName}
+            {sessionData.showtime?.date} at {sessionData.showtime?.time} •{" "}
+            {sessionData.showtime?.hallName}
           </p>
         </div>
 
@@ -146,8 +169,12 @@ export default function GroupBookingRoom() {
             onClick={handleCopy}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-lg shadow-cyan-950 transition"
           >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Link Copied' : 'Invite Friends'}
+            {copied ? (
+              <Check className="w-3.5 h-3.5" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+            {copied ? "Link Copied" : "Invite Friends"}
           </button>
         </div>
       </div>
@@ -167,7 +194,9 @@ export default function GroupBookingRoom() {
           {/* Group Seats Status Bar */}
           <div className="p-4 rounded-2xl bg-dark-900 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div>
-              <span className="text-slate-400 font-medium">Your Selected Seats:</span>
+              <span className="text-slate-400 font-medium">
+                Your Selected Seats:
+              </span>
               <div className="flex gap-1.5 mt-1">
                 {selectedSeats.length > 0 ? (
                   selectedSeats.map((s) => (
@@ -179,7 +208,9 @@ export default function GroupBookingRoom() {
                     </span>
                   ))
                 ) : (
-                  <span className="text-slate-500 italic">Click seats on map to reserve</span>
+                  <span className="text-slate-500 italic">
+                    Click seats on map to reserve
+                  </span>
                 )}
               </div>
             </div>
@@ -202,7 +233,11 @@ export default function GroupBookingRoom() {
           <GroupChatPanel
             groupId={groupId}
             isLeader={isLeader}
-            members={groupState.members.length > 0 ? groupState.members : sessionData.members || []}
+            members={
+              groupState.members.length > 0
+                ? groupState.members
+                : sessionData.members || []
+            }
             onLeaderProceed={handleLeaderProceed}
             selectedSeatsCount={selectedSeats.length}
           />
@@ -213,12 +248,15 @@ export default function GroupBookingRoom() {
       {showQrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-dark-900 border border-slate-800 rounded-3xl p-6 max-w-xs w-full text-center space-y-4">
-            <h3 className="font-bold text-base text-white">Scan to Join Room</h3>
+            <h3 className="font-bold text-base text-white">
+              Scan to Join Room
+            </h3>
             <div className="p-3 rounded-2xl bg-white inline-block mx-auto">
               <QRCodeSVG value={shareableUrl} size={160} />
             </div>
             <p className="text-xs text-slate-400">
-              Have friends scan with their phone camera to pick cinema seats together live!
+              Have friends scan with their phone camera to pick cinema seats
+              together live!
             </p>
             <button
               onClick={() => setShowQrModal(false)}

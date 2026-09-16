@@ -1,10 +1,14 @@
 import SeatIcon from "./SeatIcon";
 import { GOLD_ROWS, GOLD_COL_GROUPS } from "../../data/seatLayoutData";
 
+const getFallbackSvg = (initials, bg) =>
+  `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="30" fill="${encodeURIComponent(bg)}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="24" fill="%23ffffff">${initials}</text></svg>`;
+
 export default function GoldClassSeatMap({
   isSeatReserved,
   isSeatSelected,
   onSeatClick,
+  groupSeatAvatars = {},
 }) {
   return (
     <div className="min-w-[420px] max-w-lg mx-auto space-y-3.5 sm:space-y-4 select-none">
@@ -49,11 +53,56 @@ export default function GoldClassSeatMap({
                     const seatId = `${rowLetter}${col}`;
                     const isReserved = isSeatReserved(seatId);
                     const isSelected = isSeatSelected(seatId);
+                    const avatarInfo = groupSeatAvatars[seatId];
                     const status = isReserved
                       ? "reserved"
                       : isSelected
                         ? "selected"
                         : "available";
+
+                    if (avatarInfo) {
+                      return (
+                        <button
+                          key={seatId}
+                          type="button"
+                          onClick={() => {
+                            if (!avatarInfo.isLocked) {
+                              onSeatClick(rowLetter, col, false);
+                            }
+                          }}
+                          className={`p-0.5 rounded-lg transition-transform ${
+                            avatarInfo.isLocked
+                              ? "cursor-default opacity-95"
+                              : "hover:scale-110 active:scale-95 cursor-pointer"
+                          }`}
+                          aria-label={`Seat ${seatId} (${avatarInfo.name})`}
+                          title={`Gold Class Seat ${seatId} • ${avatarInfo.name}`}
+                        >
+                          <div
+                            className="w-[30px] h-[30px] rounded-full overflow-hidden border-2 shadow-sm flex items-center justify-center bg-neutral-800"
+                            style={{ borderColor: avatarInfo.color }}
+                          >
+                            <img
+                              src={
+                                avatarInfo.avatar ||
+                                getFallbackSvg(
+                                  avatarInfo.initials || "U",
+                                  avatarInfo.color,
+                                )
+                              }
+                              alt={avatarInfo.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = getFallbackSvg(
+                                  avatarInfo.initials || "U",
+                                  avatarInfo.color,
+                                );
+                              }}
+                            />
+                          </div>
+                        </button>
+                      );
+                    }
 
                     return (
                       <button

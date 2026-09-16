@@ -369,24 +369,28 @@ export async function cancelBooking(bookingId, userId) {
    MULTIPLAYER GROUP SESSIONS & CHAT
 ------------------------------------------------------------- */
 export async function createGroupSession(sessionData) {
-  const groupId = `grp_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+  const groupId =
+    sessionData?.groupId ||
+    `GRP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
   const group = {
     groupId,
     createdAt: Date.now(),
     status: "ACTIVE",
+    members: [],
+    selectedSeats: {},
     ...sessionData,
   };
 
   if (!isMockFirebase) {
     try {
-      await setDoc(doc(db, "groupSessions", groupId), group);
+      await setDoc(doc(db, "groupSessions", groupId), group, { merge: true });
     } catch (e) {
       console.warn("Firestore createGroupSession error:", e.message);
     }
   }
 
   const groups = getLocalData("group_sessions", {});
-  groups[groupId] = group;
+  groups[groupId] = { ...(groups[groupId] || {}), ...group };
   setLocalData("group_sessions", groups);
   return group;
 }
@@ -397,9 +401,21 @@ export function listenGroupSession(groupId, onUpdate) {
   if (!isMockFirebase) {
     try {
       const docRef = doc(db, "groupSessions", groupId);
-      return onSnapshot(docRef, (snap) => {
-        if (snap.exists()) onUpdate(snap.data());
-      });
+      return onSnapshot(
+        docRef,
+        (snap) => {
+          if (snap.exists()) {
+            onUpdate(snap.data());
+          } else {
+            onUpdate(null);
+          }
+        },
+        (err) => {
+          console.warn("Firestore listenGroupSession onSnapshot error:", err);
+          const groups = getLocalData("group_sessions", {});
+          onUpdate(groups[groupId] || null);
+        },
+      );
     } catch (e) {
       console.warn("Firestore listenGroupSession error:", e.message);
     }
@@ -407,7 +423,7 @@ export function listenGroupSession(groupId, onUpdate) {
 
   const check = () => {
     const groups = getLocalData("group_sessions", {});
-    if (groups[groupId]) onUpdate(groups[groupId]);
+    onUpdate(groups[groupId] || null);
   };
   check();
 
@@ -416,6 +432,110 @@ export function listenGroupSession(groupId, onUpdate) {
   };
   window.addEventListener("Ciniverse_storage_event", handleEvt);
   return () => window.removeEventListener("Ciniverse_storage_event", handleEvt);
+}
+
+export async function joinGroupSession(groupId, user) {
+  if (!groupId || !user) return;
+  const member = {
+    uid: String(
+      user.uid ||
+        user.id ||
+        `usr_${Math.random().toString(36).substring(2, 6)}`,
+    ),
+    name: user.name || user.displayName || "Cinephile Friend",
+    displayName: user.displayName || user.name || "Cinephile Friend",
+    avatar: user.avatar || user.photoURL || null,
+    joinedAt: Date.now(),
+    color: user.color || "#3B82F6",
+  };
+
+  if (!isMockFirebase) {
+    try {
+      const docRef = doc(db, "groupSessions", groupId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const existingMembers = Array.isArray(data.members) ? data.members : [];
+        const exists = existingMembers.some(
+          (m) => String(m.uid) === member.uid,
+        );
+        if (!exists) {
+          await setDoc(
+            docRef,
+            { members: [...existingMembers, member] },
+            { merge: true },
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Firestore joinGroupSession error:", e.message);
+    }
+  }
+
+  const groups = getLocalData("group_sessions", {});
+  if (groups[groupId]) {
+    const existingMembers = Array.isArray(groups[groupId].members)
+      ? groups[groupId].members
+      : [];
+    if (!existingMembers.some((m) => String(m.uid) === member.uid)) {
+      groups[groupId].members = [...existingMembers, member];
+      setLocalData("group_sessions", groups);
+    }
+  }
+}
+
+export async function toggleGroupMemberSeat(
+  groupId,
+  seatId,
+  member,
+  isSelected,
+) {
+  if (!groupId || !seatId) return;
+
+  if (!isMockFirebase) {
+    try {
+      const docRef = doc(db, "groupSessions", groupId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const seats = { ...(data.selectedSeats || {}) };
+        if (isSelected) {
+          seats[seatId] = {
+            uid: String(member?.uid || member?.id || "guest"),
+            name: member?.name || member?.displayName || "Friend",
+            avatar: member?.avatar || member?.photoURL || null,
+            color: member?.color || "#3B82F6",
+          };
+        } else {
+          delete seats[seatId];
+        }
+        await setDoc(
+          docRef,
+          { selectedSeats: seats, lastUpdatedAt: Date.now() },
+          { merge: true },
+        );
+      }
+    } catch (e) {
+      console.warn("Firestore toggleGroupMemberSeat error:", e.message);
+    }
+  }
+
+  const groups = getLocalData("group_sessions", {});
+  if (groups[groupId]) {
+    const seats = { ...(groups[groupId].selectedSeats || {}) };
+    if (isSelected) {
+      seats[seatId] = {
+        uid: String(member?.uid || member?.id || "guest"),
+        name: member?.name || member?.displayName || "Friend",
+        avatar: member?.avatar || member?.photoURL || null,
+        color: member?.color || "#3B82F6",
+      };
+    } else {
+      delete seats[seatId];
+    }
+    groups[groupId].selectedSeats = seats;
+    setLocalData("group_sessions", groups);
+  }
 }
 
 export async function updateGroupSessionSeats(groupId, selectedSeats, user) {
@@ -428,7 +548,9 @@ export async function updateGroupSessionSeats(groupId, selectedSeats, user) {
 
   if (!isMockFirebase) {
     try {
-      await setDoc(doc(db, "groupSessions", groupId), updateData, { merge: true });
+      await setDoc(doc(db, "groupSessions", groupId), updateData, {
+        merge: true,
+      });
     } catch (e) {
       console.warn("Firestore updateGroupSessionSeats error:", e.message);
     }
@@ -438,24 +560,6 @@ export async function updateGroupSessionSeats(groupId, selectedSeats, user) {
   if (groups[groupId]) {
     groups[groupId] = { ...groups[groupId], ...updateData };
     setLocalData("group_sessions", groups);
-  }
-}
-
-export async function joinGroupSession(groupId, user) {
-  if (!groupId || !user) return;
-  const member = {
-    uid: user.uid || user.id || `usr_${Math.random().toString(36).substring(2, 6)}`,
-    displayName: user.displayName || user.name || "Cinephile Friend",
-    avatar: user.avatar || user.photoURL || null,
-    joinedAt: Date.now(),
-  };
-
-  if (!isMockFirebase) {
-    try {
-      await setDoc(doc(db, `groupSessions/${groupId}/members`, member.uid), member);
-    } catch (e) {
-      console.warn("Firestore joinGroupSession error:", e.message);
-    }
   }
 }
 
@@ -1241,4 +1345,3 @@ export async function deleteAdminMovie(movieId) {
   setLocalData("admin_movies", updated);
   return updated;
 }
-
